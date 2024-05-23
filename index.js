@@ -62,7 +62,21 @@ let balance_schema = {
     required: ["usernumber"],
     additionalProperties: false
   }
+
+let deposit_schema = {
+    type: "object",
+    properties: {
+      usernumber: {type: "string"},
+      iban: {type: "string"},
+      amount: {type: "number"}
+    },
+    required: ["usernumber", "iban", "amount"],
+    additionalProperties: false
+  }
+
   const balance_validate = ajv.compile(balance_schema);
+  const deposit_validate = ajv.compile(deposit_schema);
+
 
 
 //Functions
@@ -79,6 +93,13 @@ app.get("/balance", async function(req, res){
     let sql = "SELECT usernumber, balance, useable_balance FROM account WHERE usernumber = ?";
     var result = await query(sql, [req.body.usernumber]);
     console.log(result);
+
+    if(results[0] == undefined){
+        res.send("nix gefunden");
+        return 0;
+    }
+
+
     res.send(result);
       
 });
@@ -88,7 +109,7 @@ app.get("/transactions", async function(req, res){
   
     let valid = balance_validate(req.body);
     if(!valid){
-        console.log(valid.errors);
+        console.log(req.body);
         res.send("womp")
         return 0;
     }
@@ -107,6 +128,10 @@ app.get("/transactions", async function(req, res){
         delete results[i].receiver;
         delete results[i].ID;
     }
+    if(results[0] == undefined){
+        res.send("nix gefunden");
+        return 0;
+    }
     res.send(results);
       
 });
@@ -121,11 +146,61 @@ app.get("/moneyflow", async function(req,res){
 
     let sql = "SELECT a.ID, w.* FROM withdrawal as w INNER JOIN account as a ON w.receiver = a.ID WHERE a.usernumber = ?";
     var results = await query(sql, [req.body.usernumber]);
+
+    if(results[0] == undefined){
+        res.send("nix gefunden");
+        return 0;
+    }
+
+
     res.send(results);
 
 
 });
 
+app.put("/deposit", async function(req,res){
+    let valid = deposit_validate(req.body);
+    if(!valid){
+        console.log(valid.errors);
+        res.send("womp")
+        return 0;
+    }
+
+    let sql = "SELECT * FROM account WHERE iban = ?";
+    var results = await query(sql, [req.body.iban]);
+
+    if(results[0] == undefined){
+        res.send("nix gefunden");
+        return 0;
+    }
+
+    const receiver_id = results[0].ID;
+    const todayDate = new Date();
+    const formattedDate = todayDate.toISOString().split('T')[0].replace(/-/g, ' ');
+    console.log(todayDate);
+    console.log(results);
+
+    let sql2 = "SELECT * FROM account WHERE usernumber = ?";
+    var results = await query(sql2, [req.body.usernumber]);
+
+    if(results[0] == undefined){
+        res.send("nix gefunden");
+        return 0;
+    }
+    const transmitter_id = results[0].ID;
+
+    console.log(results);
+
+    let sql3 = "INSERT INTO prosperVault.deposit (receiver, transmitter, value, `date`) VALUES( ?, ?, ?, '')";
+
+    var results = await query(sql2, [receiver_id, transmitter_id, req.body.amount, formattedDate]);
+    res.send(results);
+    
+
+  
+
+
+});
 
 //Start App 
 app.listen(3000,() => console.log("ProsperVault REST gestartet"));
